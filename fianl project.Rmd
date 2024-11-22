@@ -1,0 +1,247 @@
+---
+title: "final project"
+author: "Chrissy Chen"
+date: "2024-11-20"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+1. Data cleaning
+```{r}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(skimr)
+library(DataExplorer)
+library(survival)
+library(survminer)
+library(MASS)
+cirrhosis <- read_csv("cirrhosis.csv")
+# Recode the Status variable
+cirrhosis$Surv_Status <- ifelse(cirrhosis$Status == "D", 1, 0)
+```
+
+1. EDA
+```{r}
+# Summary statistics of each column
+summary(cirrhosis)
+
+# Identify missing values
+colSums(is.na(cirrhosis))
+
+# Visualize missing data
+plot_missing(cirrhosis)
+
+# Visualize distributions of numerical columns
+plot_histogram(cirrhosis)
+
+# Correlation matrix for numerical variables
+correlation <- cor(select_if(cirrhosis, is.numeric), use = "complete.obs")
+corrplot::corrplot(correlation, method = "circle")
+
+# Dealing with missing values: 
+# For continuous variables: Replace missing values with median
+# For categorical variables: Replace with the most frequent category (mode).
+cirrhosis$Prothrombin[is.na(cirrhosis$Prothrombin)] <- median(cirrhosis$Prothrombin, na.rm = TRUE)
+cirrhosis$SGOT[is.na(cirrhosis$SGOT)] <- median(cirrhosis$SGOT, na.rm = TRUE)
+cirrhosis$Tryglicerides[is.na(cirrhosis$Tryglicerides)] <- median(cirrhosis$Tryglicerides, na.rm = TRUE)
+cirrhosis$Cholesterol[is.na(cirrhosis$Cholesterol)] <- median(cirrhosis$Cholesterol, na.rm = TRUE)
+cirrhosis$Copper[is.na(cirrhosis$Copper)] <- median(cirrhosis$Copper, na.rm = TRUE)
+cirrhosis$Platelets[is.na(cirrhosis$Platelets)] <- median(cirrhosis$Platelets, na.rm = TRUE)
+cirrhosis$Alk_Phos[is.na(cirrhosis$Alk_Phos)] <- median(cirrhosis$Alk_Phos, na.rm = TRUE)
+
+mode_impute <- function(x) {
+  x[is.na(x)] <- as.character(names(which.max(table(x, useNA = "no"))))
+  return(x)
+}
+cirrhosis$Drug <- mode_impute(cirrhosis$Drug)
+cirrhosis$Ascites <- mode_impute(cirrhosis$Ascites)
+cirrhosis$Hepatomegaly <- mode_impute(cirrhosis$Hepatomegaly)
+cirrhosis$Spiders <- mode_impute(cirrhosis$Spiders)
+cirrhosis$Stage <- mode_impute(cirrhosis$Stage)
+```
+
+2. Non-parametric Methods: Kaplan-Meier Estimator
+```{r}
+# Create a survival object
+surv_obj <- Surv(time = cirrhosis$N_Days, event = (cirrhosis$Status == "D"))
+
+# Kaplan-Meier survival curve
+km_fit <- survfit(surv_obj ~ 1, data = cirrhosis)
+
+# Plot the survival curve
+ggsurvplot(km_fit, 
+           conf.int = TRUE,
+           pval = TRUE,
+           risk.table = TRUE,
+           title = "Kaplan-Meier Survival Curve",
+           xlab = "Time (days)",
+           ylab = "Survival Probability")
+
+summary(km_fit, times = c(365, 1095, 1825, 2555, 3285, 3650))  # Survival at 1, 3, 5, 7, 9, 10 years
+
+# draw KM curve stratified by sex
+#survdiff(Surv(N_Days, Status == "D") ~ Sex, data = cirrhosis)
+km_fit_sex <- survfit(Surv(N_Days, Status == "D") ~ Sex, data = cirrhosis)
+ggsurvplot(km_fit_sex, 
+           conf.int = TRUE, 
+           pval = TRUE, 
+           risk.table = TRUE, 
+           title = "Kaplan-Meier Survival Curve by Sex", 
+           xlab = "Time (days)", 
+           ylab = "Survival Probability")
+
+
+```
+
+3. Semi-parametric Methods: Cox Proportional Hazards Model
+3.1 Model selection
+```{r}
+# 1)	Fit a univariate model for each covariate, and identify the predictors significant at some level p1, say 0.20
+uni_Drug <- coxph(surv_obj ~ Drug, data = cirrhosis)
+summary(uni_Drug)
+
+uni_Age <- coxph(surv_obj ~ Age, data = cirrhosis)
+summary(uni_Age) **
+
+uni_Sex <- coxph(surv_obj ~ Sex, data = cirrhosis)
+summary(uni_Sex) **
+
+uni_Ascites <- coxph(surv_obj ~ Ascites, data = cirrhosis)
+summary(uni_Ascites) **
+
+uni_Hepatomegaly <- coxph(surv_obj ~ Hepatomegaly, data = cirrhosis)
+summary(uni_Hepatomegaly) ** 
+
+uni_Spiders <- coxph(surv_obj ~ Spiders, data = cirrhosis)
+summary(uni_Spiders) **
+
+uni_Bilirubin <- coxph(surv_obj ~ Bilirubin, data = cirrhosis)
+summary(uni_Bilirubin) **
+
+uni_Albumin <- coxph(surv_obj ~ Albumin, data = cirrhosis)
+summary(uni_Albumin) **
+
+uni_Edema <- coxph(surv_obj ~ Edema, data = cirrhosis)
+summary(uni_Edema) **
+
+uni_Copper <- coxph(surv_obj ~ Copper, data = cirrhosis)
+summary(uni_Copper) **
+
+uni_Alk_Phos <- coxph(surv_obj ~ Alk_Phos, data = cirrhosis)
+summary(uni_Alk_Phos) **
+
+uni_SGOT <- coxph(surv_obj ~ SGOT, data = cirrhosis)
+summary(uni_SGOT) **
+
+uni_Tryglicerides <- coxph(surv_obj ~ Tryglicerides, data = cirrhosis)
+summary(uni_Tryglicerides) **
+
+uni_Prothrombin <- coxph(surv_obj ~ Prothrombin, data = cirrhosis)
+summary(uni_Prothrombin) **
+
+uni_Cholesterol <- coxph(surv_obj ~ Cholesterol, data = cirrhosis)
+summary(uni_Cholesterol) **
+
+uni_Platelets <- coxph(surv_obj ~ Platelets, data = cirrhosis)
+summary(uni_Platelets) **
+# drop Drug
+
+# 2)	Fit a multivariate model with all significant univariate predictors, and use backward selection to eliminate non-significant variables at some level p2, say 0.10
+model_2 <- coxph(surv_obj ~ Age + Ascites + Hepatomegaly + Spiders + Bilirubin + Albumin + Edema + Copper + Alk_Phos + SGOT + Tryglicerides + Prothrombin + Cholesterol + Platelets, 
+                    data = cirrhosis)
+model_backward <- stepAIC(model_2, direction = "backward") 
+summary(model_backward)
+# drop Ascites, Spiders, Alk_Phos, Tryglicerides, Cholesterol, Platelets
+
+# 3) Starting with final step (2) model, consider each of the non-significant variables from step (1) using forward selection, with significance level p3, say 0.10
+model_3_ascites <- coxph(surv_obj ~ Ascites + Age + Hepatomegaly + Bilirubin + Albumin + Edema + Copper + SGOT + Prothrombin, data = cirrhosis)
+model_forward_ascites <- stepAIC(model_3_ascites, direction = "forward") 
+summary(model_forward_ascites)
+
+model_3_spiders <- coxph(surv_obj ~ Spiders + Age + Hepatomegaly + Bilirubin + Albumin + Edema + Copper + SGOT + Prothrombin, data = cirrhosis)
+model_forward_spiders <- stepAIC(model_3_spiders, direction = "forward") 
+summary(model_forward_spiders)
+
+model_3_alk <- coxph(surv_obj ~ Alk_Phos + Age + Hepatomegaly + Bilirubin + Albumin + Edema + Copper + SGOT + Prothrombin, data = cirrhosis)
+model_forward_alk <- stepAIC(model_3_alk, direction = "forward") 
+summary(model_forward_alk)
+
+model_3_tryglicerides <- coxph(surv_obj ~ Tryglicerides + Age + Hepatomegaly + Bilirubin + Albumin + Edema + Copper + SGOT + Prothrombin, data = cirrhosis)
+model_forward_tryglicerides <- stepAIC(model_3_tryglicerides, direction = "forward") 
+summary(model_forward_tryglicerides)
+
+model_3_cholesterol <- coxph(surv_obj ~ Cholesterol + Age + Hepatomegaly + Bilirubin + Albumin + Edema + Copper + SGOT + Prothrombin, data = cirrhosis)
+model_forward_cholesterol <- stepAIC(model_3_cholesterol, direction = "forward") 
+summary(model_forward_cholesterol)
+
+model_3_platelets <- coxph(surv_obj ~ Platelets + Age + Hepatomegaly + Bilirubin + Albumin + Edema + Copper + SGOT + Prothrombin, data = cirrhosis)
+model_forward_platelets <- stepAIC(model_3_platelets, direction = "forward") 
+summary(model_forward_platelets)
+# no new variables added
+
+# 4)	Do final pruning of main-effects model (omit variables that are non-significant, add any that are significant), using stepwise regression with significance level p4. At this stage, you may also consider adding interactions between any of the main effects currently in the model, under the hierarchical principle
+model_4 <- coxph(surv_obj ~ Age + Hepatomegaly + Bilirubin + Albumin + Edema + Copper + SGOT + Prothrombin, 
+                    data = cirrhosis)
+model_final<- stepAIC(model_4, direction = "both") 
+summary(model_final)
+
+# Overall stepwise model selection
+model_all <- coxph(surv_obj ~ Drug + Age + Ascites + Hepatomegaly + Spiders + Bilirubin + Albumin + Edema + Copper + Alk_Phos + SGOT + Tryglicerides + Prothrombin + Cholesterol + Platelets, 
+                    data = cirrhosis)
+model_stepwise <- stepAIC(model_all, direction = "both") 
+summary(model_stepwise)
+
+# Test proportional hazards assumption
+cox_zph <- cox.zph(model_stepwise)
+cox_zph
+
+# Plot Schoenfeld residuals to check proportional hazards
+ggcoxzph(cox_zph)
+# Bilirubin & Prothrombin violate the PH assumption
+
+# Fit the extended Cox model with time-dependent terms
+cox_model_td <- coxph(surv_obj ~ Age + Albumin + Bilirubin + Bilirubin*N_Days +
+                      Prothrombin + Prothrombin*N_Days + SGOT, data = cirrhosis)
+summary(cox_model_td)
+
+# Plot Schoenfeld residuals to check proportional hazards
+cox_zph_td <- cox.zph(cox_model_td)
+ggcoxzph(cox_zph_td)
+
+# compare AIC
+# model with interaction
+AIC(cox_model_td)
+# model without interaction
+AIC(model_stepwise)
+# model with interaction has lower AIC
+anova(model_stepwise, cox_model_td, test = "LRT")
+# The time-dependent model (Model 2) is a significantly better fit compared to the simpler model (Model 1).
+
+# so the final model is:
+# coxph(surv_obj ~ Age + Albumin + Bilirubin + Bilirubin*N_Days + Prothrombin + Prothrombin*N_Days + SGOT, data = cirrhosis)
+
+```
+3.2 Residual analysis
+```{r}
+# Martingale Residuals
+martingale_residuals <- residuals(cox_model_td, type = "martingale")
+plot(martingale_residuals)
+# Deviance Residuals
+deviance_residuals <- residuals(cox_model_td, type = "deviance")
+plot(deviance_residuals)
+
+# Residual analysis suggest a generally good fit for the model, but a few observations with larger residuals could warrant further investigation.
+# Addressing or further investigating these outliers may improve interpretability and robustness of the model.
+
+# Identify observations with deviance residuals > |0.5|
+influential_obs <- which(abs(deviance_residuals) > 0.5)
+print(influential_obs)
+# 4, 6, 21, 37, 54, 59, 69, 71, 95, 104, 109, 110, 125, 131, 139, 160, 161, 169, 172, 190, 201, 210, 231, 245, 246, 254, 264, 265, 268, 269, 274, 276, 277, 290, 294, 305, 306, 308, 309, 310, 312, 320, 321, 326, 337, 338, 365, 378, 400, 402, 408, 412, 418
+
+```
+
