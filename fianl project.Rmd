@@ -9,22 +9,6 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-1. Data cleaning
-```{r}
-library(readr)
-library(dplyr)
-library(ggplot2)
-library(tidyverse)
-library(skimr)
-library(DataExplorer)
-library(survival)
-library(survminer)
-library(MASS)
-cirrhosis <- read_csv("cirrhosis.csv")
-# Recode the Status variable
-cirrhosis$Surv_Status <- ifelse(cirrhosis$Status == "D", 1, 0)
-```
-
 1. EDA
 ```{r}
 # Summary statistics of each column
@@ -42,7 +26,9 @@ plot_histogram(cirrhosis)
 # Correlation matrix for numerical variables
 correlation <- cor(select_if(cirrhosis, is.numeric), use = "complete.obs")
 corrplot::corrplot(correlation, method = "circle")
+```
 
+```{r}
 # Dealing with missing values: 
 # For continuous variables: Replace missing values with median
 # For categorical variables: Replace with the most frequent category (mode).
@@ -58,11 +44,37 @@ mode_impute <- function(x) {
   x[is.na(x)] <- as.character(names(which.max(table(x, useNA = "no"))))
   return(x)
 }
-cirrhosis$Drug <- mode_impute(cirrhosis$Drug)
-cirrhosis$Ascites <- mode_impute(cirrhosis$Ascites)
-cirrhosis$Hepatomegaly <- mode_impute(cirrhosis$Hepatomegaly)
-cirrhosis$Spiders <- mode_impute(cirrhosis$Spiders)
+
 cirrhosis$Stage <- mode_impute(cirrhosis$Stage)
+
+```
+
+```{r}
+# Function to recode NA values based on percentages of known values
+recode_na_by_percentage <- function(data, columns) {
+  for (column in columns) {
+    counts <- table(data[[column]], useNA = "no")
+    percentages <- counts / sum(counts)
+    
+    # Replace NA values based on the probabilities
+    data[[column]] <- sapply(data[[column]], function(x) {
+      if (is.na(x)) {
+        sample(names(percentages), size = 1, prob = percentages)
+      } else {
+        x
+      }
+    })
+  }
+  return(data)
+}
+
+columns_to_recode <- c("Ascites", "Hepatomegaly", "Spiders", "Drug")
+
+# Apply the function to recode NA values
+cirrhosis <- recode_na_by_percentage(cirrhosis, columns_to_recode)
+
+# Display the updated dataset
+print(cirrhosis)
 ```
 
 2. Non-parametric Methods: Kaplan-Meier Estimator
