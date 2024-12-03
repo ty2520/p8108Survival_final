@@ -137,6 +137,17 @@ ggsurvplot(km_fit_drug,
            title = "Kaplan-Meier Survival Curve by Drug", 
            xlab = "Time (days)", 
            ylab = "Survival Probability")
+# Fit the survival model for 'Stage'
+km_fit_stage <- survfit(Surv(N_Days, Status == "D") ~ Stage, data = cirrhosis)
+
+# Plot the Kaplan-Meier survival curve for 'Stage'
+ggsurvplot(km_fit_stage, 
+           conf.int = TRUE, 
+           pval = TRUE, 
+           risk.table = TRUE, 
+           title = "Kaplan-Meier Survival Curve by Stage", 
+           xlab = "Time (days)", 
+           ylab = "Survival Probability")
 
 
 ```
