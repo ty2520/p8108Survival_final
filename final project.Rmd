@@ -92,8 +92,17 @@ plot_missing(cirrhosis)
 plot_histogram(cirrhosis)
 
 # Correlation matrix for numerical variables
-correlation <- cor(select_if(cirrhosis, is.numeric), use = "complete.obs")
+library(dplyr)
+library(corrplot)
+
+# Step 1:remove the first column (`id`) manually
+cirrhosis_without_id <- cirrhosis[, -1] %>%  # Remove the first column
+  select_if(is.numeric)  # Retain only numeric columns
+
+# Step 2: Compute and plot the correlation matrix
+correlation <- cor(cirrhosis_without_id, use = "complete.obs")
 corrplot::corrplot(correlation, method = "circle")
+
 ```
 
 2. Non-parametric Methods: Kaplan-Meier Estimator
